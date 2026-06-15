@@ -1,1 +1,25 @@
 reference/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Local runtime data
+data/
+*.sqlite
+*.sqlite-*
+
+# Frontend dependencies and build outputs
+node_modules/
+dist/
+build/
+
+# Go build outputs
+bin/
+coverage.out
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
