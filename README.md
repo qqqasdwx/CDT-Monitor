@@ -127,7 +127,7 @@ docker compose up -d
 | `CDT_CHECK_INTERVAL_SECONDS` | `60` | 检查间隔，最低 10 秒 |
 | `CDT_CONTROL_MODE` | `keep_running` | 控制模式，见下文 |
 | `CDT_DRY_RUN` | `false` | 设置为 `true` 时只打印动作，不真正启停 ECS |
-| `ECS_STOPPED_MODE` | `KeepCharging` | 停机模式：`KeepCharging` 或 `StopCharging` |
+| `ECS_STOPPED_MODE` | `StopCharging` | 停机模式：`StopCharging` 或 `KeepCharging` |
 | `ECS_FORCE_STOP` | `false` | 是否强制停机 |
 | `RUN_ONCE` | `false` | 只执行一轮后退出 |
 | `LOG_LEVEL` | `INFO` | 日志级别 |
@@ -181,16 +181,16 @@ ECS_INSTANCE_IDS=i-xxx1,i-xxx2,i-xxx3
 ## 停机模式
 
 ```env
-ECS_STOPPED_MODE=KeepCharging
-```
-
-普通停机。停止实例后保留计算资源，通常恢复更快，但仍可能产生相关费用。
-
-```env
 ECS_STOPPED_MODE=StopCharging
 ```
 
-节省停机。释放计算资源并停止计算费用。注意：如果实例使用非 EIP 公网 IP，重启后公网 IP 可能变化。
+默认模式。节省停机，释放计算资源并停止计算费用。注意：如果实例使用非 EIP 公网 IP，重启后公网 IP 可能变化。
+
+```env
+ECS_STOPPED_MODE=KeepCharging
+```
+
+普通停机。停止实例后保留计算资源，通常恢复更快，但仍可能产生相关费用。只有在明确需要保留计算资源或特定网络行为时再使用。
 
 ## RAM 权限
 

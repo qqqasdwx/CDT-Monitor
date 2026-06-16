@@ -10,7 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CDT_CHECK_INTERVAL_SECONDS=60 \
     CDT_CONTROL_MODE=keep_running \
     CDT_TRAFFIC_THRESHOLD_GB=180 \
-    ECS_STOPPED_MODE=KeepCharging \
+    ECS_STOPPED_MODE=StopCharging \
     ECS_FORCE_STOP=false \
     CDT_HEARTBEAT_FILE=/tmp/cdt-guard-heartbeat
 

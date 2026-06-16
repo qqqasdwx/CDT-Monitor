@@ -116,7 +116,7 @@ def load_config() -> Config:
     if control_mode not in {"keep_running", "protect_only", "dry_run"}:
         raise ValueError("CDT_CONTROL_MODE must be keep_running, protect_only, or dry_run")
 
-    stopped_mode = os.getenv("ECS_STOPPED_MODE", "KeepCharging").strip()
+    stopped_mode = os.getenv("ECS_STOPPED_MODE", "StopCharging").strip()
     if stopped_mode not in {"KeepCharging", "StopCharging"}:
         raise ValueError("ECS_STOPPED_MODE must be KeepCharging or StopCharging")
 

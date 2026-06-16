@@ -22,8 +22,8 @@ services:
       # Check interval. Minimum accepted by the container is 10 seconds.
       CDT_CHECK_INTERVAL_SECONDS: ${CDT_CHECK_INTERVAL_SECONDS:-60}
 
-      # KeepCharging keeps resources billed; StopCharging stops billing but may change
-      # non-EIP public IP after restart.
-      ECS_STOPPED_MODE: ${ECS_STOPPED_MODE:-KeepCharging}
+      # StopCharging stops billing but may change non-EIP public IP after restart.
+      # Use KeepCharging only if you explicitly need to keep compute resources billed.
+      ECS_STOPPED_MODE: ${ECS_STOPPED_MODE:-StopCharging}
       ECS_FORCE_STOP: ${ECS_FORCE_STOP:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
