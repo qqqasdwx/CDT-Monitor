@@ -19,11 +19,6 @@ build/
 bin/
 coverage.out
 
-# Python local files
-.venv/
-__pycache__/
-*.pyc
-
 # OS/editor noise
 .DS_Store
 .idea/
