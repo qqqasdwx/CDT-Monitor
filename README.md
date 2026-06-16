@@ -1,18 +1,53 @@
-# CDT-Monitor
+# CDT Guard
 
-轻量级阿里云 CDT 流量保护与 ECS 管理工具。
+这是 `cdt-guard` 分支专用的临时镜像说明。本分支不作为主线开发合并目标，只用于在完整 CDT-Monitor 开发完成前，先提供一个可运行的 CDT 流量保护守护进程。
 
-当前 `dev` 镜像先提供一版临时可用的 CDT 保护守护进程：它基于 `reference/cdt.sh` 的核心逻辑，将配置改为环境变量，并在容器中循环执行。
-
-## 临时可用镜像
-
-镜像：
+镜像地址：
 
 ```bash
 ghcr.io/qqqasdwx/cdt-monitor:guard
 ```
 
-最小运行示例：
+## 当前功能
+
+这个镜像基于 `reference/cdt.sh` 的核心逻辑改造，配置全部改为环境变量，并在容器中循环执行。
+
+已支持：
+
+- 定时查询阿里云 CDT 总流量。
+- 查询指定 ECS 实例状态。
+- 按流量阈值自动启动或停止 ECS。
+- 支持单实例和多实例。
+- 支持三种控制模式：`keep_running`、`protect_only`、`dry_run`。
+- 支持普通停机和节省停机。
+- 支持强制停机开关。
+- 支持只执行一轮后退出，便于测试。
+- 支持 Docker Compose 部署。
+- 容器内置 heartbeat healthcheck。
+
+默认行为：
+
+```text
+CDT 流量 < 阈值  -> 尝试启动 ECS
+CDT 流量 >= 阈值 -> 尝试停止 ECS
+```
+
+## 不包含的功能
+
+当前镜像只是临时保护版本，不包含完整 CDT-Monitor 功能。
+
+- 没有 Web UI。
+- 没有数据库。
+- 没有账号管理页面。
+- 没有历史图表。
+- 没有邮件、Telegram、Webhook 通知。
+- 没有云监控事件订阅 webhook 秒级保活。
+- 没有定时开关机。
+- 没有费用和余额查询。
+- 没有 DDNS。
+- 没有 ECS 创建、释放、换 IP。
+
+## 快速运行
 
 ```bash
 docker run -d \
@@ -26,12 +61,51 @@ docker run -d \
   ghcr.io/qqqasdwx/cdt-monitor:guard
 ```
 
-默认行为：
+查看日志：
 
-- 每 60 秒检查一次 CDT 总流量。
-- 当流量低于阈值时，尝试启动 ECS。
-- 当流量达到或超过阈值时，尝试停止 ECS。
-- 默认停机模式为 `KeepCharging`。
+```bash
+docker logs -f cdt-monitor
+```
+
+停止：
+
+```bash
+docker rm -f cdt-monitor
+```
+
+## Docker Compose
+
+本分支提供了 [compose.yaml](./compose.yaml) 示例。
+
+建议在同目录创建 `.env`：
+
+```env
+ALIYUN_ACCESS_KEY_ID=你的 AccessKey ID
+ALIYUN_ACCESS_KEY_SECRET=你的 AccessKey Secret
+ALIYUN_REGION_ID=cn-hongkong
+ECS_INSTANCE_ID=i-xxxxxxxxxxxxxxxxx
+CDT_TRAFFIC_THRESHOLD_GB=180
+CDT_CONTROL_MODE=protect_only
+```
+
+启动：
+
+```bash
+docker compose up -d
+```
+
+查看日志：
+
+```bash
+docker compose logs -f
+```
+
+更新镜像：
+
+```bash
+docker compose pull
+docker compose up -d
+```
 
 ## 环境变量
 
@@ -51,22 +125,72 @@ docker run -d \
 | `ECS_INSTANCE_IDS` | 空 | 多实例 ID，英文逗号分隔；设置后优先于 `ECS_INSTANCE_ID` |
 | `CDT_TRAFFIC_THRESHOLD_GB` | `180` | CDT 流量阈值，单位 GB |
 | `CDT_CHECK_INTERVAL_SECONDS` | `60` | 检查间隔，最低 10 秒 |
-| `CDT_CONTROL_MODE` | `keep_running` | `keep_running`：低于阈值启动，高于阈值停机；`protect_only`：只在超阈值时停机；`dry_run`：只打印动作 |
-| `CDT_DRY_RUN` | `false` | 设置为 `true` 时只打印将要执行的动作，不调用启动/停机 |
+| `CDT_CONTROL_MODE` | `keep_running` | 控制模式，见下文 |
+| `CDT_DRY_RUN` | `false` | 设置为 `true` 时只打印动作，不真正启停 ECS |
 | `ECS_STOPPED_MODE` | `KeepCharging` | 停机模式：`KeepCharging` 或 `StopCharging` |
 | `ECS_FORCE_STOP` | `false` | 是否强制停机 |
 | `RUN_ONCE` | `false` | 只执行一轮后退出 |
 | `LOG_LEVEL` | `INFO` | 日志级别 |
 
-## 只保护不自动启动
+## 控制模式
 
-如果你不希望容器把手动停掉的实例重新拉起，使用：
+### `keep_running`
 
-```bash
--e CDT_CONTROL_MODE="protect_only"
+默认模式。
+
+```text
+CDT 流量 < 阈值  -> 尝试启动 ECS
+CDT 流量 >= 阈值 -> 尝试停止 ECS
 ```
 
-此模式下，低于阈值不会启动实例；达到阈值时仍会尝试停机。
+适合希望实例在流量安全时自动保持运行的场景。
+
+### `protect_only`
+
+```text
+CDT 流量 < 阈值  -> 不执行启动
+CDT 流量 >= 阈值 -> 尝试停止 ECS
+```
+
+适合只想防超量、不想容器把手动停掉的实例重新拉起的场景。
+
+### `dry_run`
+
+```text
+只打印计划动作，不真正启动或停止 ECS
+```
+
+适合第一次配置时验证 AK、区域、实例和阈值。
+
+也可以使用：
+
+```env
+CDT_DRY_RUN=true
+```
+
+## 多实例
+
+使用英文逗号分隔：
+
+```env
+ECS_INSTANCE_IDS=i-xxx1,i-xxx2,i-xxx3
+```
+
+如果同时设置了 `ECS_INSTANCE_IDS` 和 `ECS_INSTANCE_ID`，优先使用 `ECS_INSTANCE_IDS`。
+
+## 停机模式
+
+```env
+ECS_STOPPED_MODE=KeepCharging
+```
+
+普通停机。停止实例后保留计算资源，通常恢复更快，但仍可能产生相关费用。
+
+```env
+ECS_STOPPED_MODE=StopCharging
+```
+
+节省停机。释放计算资源并停止计算费用。注意：如果实例使用非 EIP 公网 IP，重启后公网 IP 可能变化。
 
 ## 最小 RAM 权限
 
@@ -79,9 +203,29 @@ ecs:StartInstance
 ecs:StopInstance
 ```
 
+如果使用 `protect_only` 且确认不需要自动启动，可以去掉 `ecs:StartInstance`。
+
+## 测试配置
+
+只执行一轮，并且不真正启停 ECS：
+
+```bash
+docker run --rm \
+  -e RUN_ONCE=true \
+  -e CDT_DRY_RUN=true \
+  -e ALIYUN_ACCESS_KEY_ID="你的 AccessKey ID" \
+  -e ALIYUN_ACCESS_KEY_SECRET="你的 AccessKey Secret" \
+  -e ALIYUN_REGION_ID="cn-hongkong" \
+  -e ECS_INSTANCE_ID="i-xxxxxxxxxxxxxxxxx" \
+  -e CDT_TRAFFIC_THRESHOLD_GB="180" \
+  ghcr.io/qqqasdwx/cdt-monitor:guard
+```
+
 ## 注意事项
 
-- 当前镜像是正式开发前的临时保护版本，还没有 Web UI、SQLite、通知和 webhook 保活。
-- CDT 流量是账号维度数据，多实例共用同一账号流量额度时要谨慎设置阈值。
-- 使用 `StopCharging` 可能导致非 EIP 的固定公网 IP 变化。
-- 不要把 AccessKey 写进源码或提交到 Git。
+- CDT 流量是账号维度数据，不是单实例精确流量。多个实例共用同一账号额度时，要谨慎设置阈值。
+- 当前守护进程依赖轮询，不是秒级事件监听。
+- 阿里云 CDT 接口可能存在统计延迟，阈值不要贴着免费额度设置。
+- 建议阈值留足缓冲，例如 200GB 免费额度可先设为 180GB。
+- 不要把 AccessKey 写进源码、镜像或 Git。
+- 这个分支只维护临时 guard 镜像；正式项目开发在 `dev` 分支继续。
