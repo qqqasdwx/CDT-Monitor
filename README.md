@@ -192,18 +192,92 @@ ECS_STOPPED_MODE=StopCharging
 
 节省停机。释放计算资源并停止计算费用。注意：如果实例使用非 EIP 公网 IP，重启后公网 IP 可能变化。
 
-## 最小 RAM 权限
+## RAM 权限
 
-建议给临时 AK/SK 只授予最小权限：
+不要在阿里云控制台里搜索 `cdt:ListCdtInternetTraffic`。CDT 的系统策略使用的是通配权限，例如 `cdt:List*`、`cdt:Describe*`、`cdt:Get*`。
 
-```text
-cdt:ListCdtInternetTraffic
-ecs:DescribeInstances
-ecs:StartInstance
-ecs:StopInstance
+推荐配置方式：
+
+1. 给 RAM 用户或角色添加系统策略 `AliyunCDTReadOnlyAccess`。
+2. 再创建一个 ECS 自定义策略，使用“脚本编辑”或“JSON”方式粘贴下面的策略。
+
+### `protect_only` 模式
+
+只需要查询实例和停止实例：
+
+```json
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeInstances",
+        "ecs:StopInstance"
+      ],
+      "Resource": [
+        "acs:ecs:*:*:instance/*"
+      ]
+    }
+  ]
+}
 ```
 
-如果使用 `protect_only` 且确认不需要自动启动，可以去掉 `ecs:StartInstance`。
+### `keep_running` 模式
+
+需要查询实例、启动实例和停止实例：
+
+```json
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeInstances",
+        "ecs:StartInstance",
+        "ecs:StopInstance"
+      ],
+      "Resource": [
+        "acs:ecs:*:*:instance/*"
+      ]
+    }
+  ]
+}
+```
+
+如果想进一步收窄 ECS 资源范围，可以把：
+
+```text
+acs:ecs:*:*:instance/*
+```
+
+改成指定地域、账号和实例 ID：
+
+```text
+acs:ecs:cn-hongkong:<你的阿里云账号ID>:instance/i-xxxxxxxxxxxxxxxxx
+```
+
+如果不使用系统策略，也可以用 CDT 自定义策略：
+
+```json
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cdt:List*",
+        "cdt:Describe*",
+        "cdt:Get*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+快速跑通但权限较宽的方式是：`AliyunCDTReadOnlyAccess` + `AliyunECSFullAccess`。不建议长期使用。
 
 ## 测试配置
 
