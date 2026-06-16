@@ -1,6 +1,6 @@
 # CDT Guard
 
-这是 `cdt-guard` 分支专用的临时镜像说明。本分支不作为主线开发合并目标，只用于在完整 CDT-Monitor 开发完成前，先提供一个可运行的 CDT 流量保护守护进程。
+CDT Guard 是一个轻量级阿里云 CDT 流量保护守护进程。它通过定时检查 CDT 流量，在达到阈值时自动停止 ECS 实例，降低流量超额后的费用风险。
 
 镜像地址：
 
@@ -34,7 +34,7 @@ CDT 流量 >= 阈值 -> 尝试停止 ECS
 
 ## 不包含的功能
 
-当前镜像只是临时保护版本，不包含完整 CDT-Monitor 功能。
+当前镜像只提供命令行守护进程能力，不包含管理控制台功能。
 
 - 没有 Web UI。
 - 没有数据库。
@@ -53,8 +53,8 @@ CDT 流量 >= 阈值 -> 尝试停止 ECS
 docker run -d \
   --name cdt-monitor \
   --restart unless-stopped \
-  -e ALIYUN_ACCESS_KEY_ID="你的 AccessKey ID" \
-  -e ALIYUN_ACCESS_KEY_SECRET="你的 AccessKey Secret" \
+  -e ALIYUN_ACCESS_KEY_ID="your-access-key-id" \
+  -e ALIYUN_ACCESS_KEY_SECRET="your-access-key-secret" \
   -e ALIYUN_REGION_ID="cn-hongkong" \
   -e ECS_INSTANCE_ID="i-xxxxxxxxxxxxxxxxx" \
   -e CDT_TRAFFIC_THRESHOLD_GB="180" \
@@ -75,13 +75,13 @@ docker rm -f cdt-monitor
 
 ## Docker Compose
 
-本分支提供了 [compose.yaml](./compose.yaml) 示例。
+仓库提供了 [compose.yaml](./compose.yaml) 示例。
 
 建议在同目录创建 `.env`：
 
 ```env
-ALIYUN_ACCESS_KEY_ID=你的 AccessKey ID
-ALIYUN_ACCESS_KEY_SECRET=你的 AccessKey Secret
+ALIYUN_ACCESS_KEY_ID=your-access-key-id
+ALIYUN_ACCESS_KEY_SECRET=your-access-key-secret
 ALIYUN_REGION_ID=cn-hongkong
 ECS_INSTANCE_ID=i-xxxxxxxxxxxxxxxxx
 CDT_TRAFFIC_THRESHOLD_GB=180
@@ -194,7 +194,7 @@ ECS_STOPPED_MODE=KeepCharging
 
 ## RAM 权限
 
-可以把本镜像需要的 CDT 和 ECS 权限写在一个自定义权限策略里。你截图里的页面就是正确位置：`RAM 访问控制 -> 权限管理 -> 权限策略 -> 创建权限策略 -> 脚本编辑`。
+可以把 CDT 和 ECS 所需权限写在一个自定义权限策略中。创建路径为：`RAM 访问控制 -> 权限管理 -> 权限策略 -> 创建权限策略 -> 脚本编辑`。
 
 控制台入口：
 
@@ -250,12 +250,12 @@ acs:ecs:*:*:instance/*
 改成指定地域、账号和实例 ID：
 
 ```text
-acs:ecs:cn-hongkong:<你的阿里云账号ID>:instance/i-xxxxxxxxxxxxxxxxx
+acs:ecs:cn-hongkong:<account-id>:instance/i-xxxxxxxxxxxxxxxxx
 ```
 
 创建完成后，到 RAM 用户或角色的“添加权限”页面，搜索并选择你刚创建的 `CDTGuardPolicy`。
 
-如果只是临时快速跑通，也可以直接授权 `AliyunCDTFullAccess` + `AliyunECSFullAccess`，但权限明显更大，不建议长期使用。
+也可以直接授权 `AliyunCDTFullAccess` + `AliyunECSFullAccess` 快速验证部署，但权限明显更大，不建议长期使用。
 
 ## 测试配置
 
@@ -265,8 +265,8 @@ acs:ecs:cn-hongkong:<你的阿里云账号ID>:instance/i-xxxxxxxxxxxxxxxxx
 docker run --rm \
   -e RUN_ONCE=true \
   -e CDT_DRY_RUN=true \
-  -e ALIYUN_ACCESS_KEY_ID="你的 AccessKey ID" \
-  -e ALIYUN_ACCESS_KEY_SECRET="你的 AccessKey Secret" \
+  -e ALIYUN_ACCESS_KEY_ID="your-access-key-id" \
+  -e ALIYUN_ACCESS_KEY_SECRET="your-access-key-secret" \
   -e ALIYUN_REGION_ID="cn-hongkong" \
   -e ECS_INSTANCE_ID="i-xxxxxxxxxxxxxxxxx" \
   -e CDT_TRAFFIC_THRESHOLD_GB="180" \
@@ -280,4 +280,3 @@ docker run --rm \
 - 阿里云 CDT 接口可能存在统计延迟，阈值不要贴着免费额度设置。
 - 建议阈值留足缓冲，例如 200GB 免费额度可先设为 180GB。
 - 不要把 AccessKey 写进源码、镜像或 Git。
-- 这个分支只维护临时 guard 镜像；正式项目开发在 `dev` 分支继续。
