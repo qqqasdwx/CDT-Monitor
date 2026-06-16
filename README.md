@@ -107,6 +107,29 @@ docker compose pull
 docker compose up -d
 ```
 
+## 获取实例 ID 和地域 ID
+
+`ECS_INSTANCE_ID` 和 `ALIYUN_REGION_ID` 必须来自同一台 ECS 实例。
+
+控制台和文档入口：
+
+- [ECS 控制台](https://ecs.console.aliyun.com/)
+- [查看实例信息](https://help.aliyun.com/zh/ecs/user-guide/view-instance-information)
+- [地域和可用区](https://help.aliyun.com/zh/document_detail/40654.html)
+- [地域 ID 对照表](https://help.aliyun.com/zh/drp/support/region-ids)
+
+获取方式：
+
+1. 打开 ECS 控制台，进入 `实例与镜像 -> 实例`。
+2. 在页面左上角选择实例所在地域，例如 `中国香港`。
+3. 在实例列表中找到目标实例。
+4. 复制实例列表或实例详情页中的 `实例ID`，填入 `ECS_INSTANCE_ID`，格式通常类似 `i-xxxxxxxxxxxxxxxxx`。
+5. 将所选地域对应的地域 ID 填入 `ALIYUN_REGION_ID`，例如 `中国香港` 对应 `cn-hongkong`，`新加坡` 对应 `ap-southeast-1`。
+
+注意：`ALIYUN_REGION_ID` 不是可用区 ID。不要填写 `cn-hongkong-b` 这类可用区 ID。
+
+如果使用 `ECS_INSTANCE_IDS` 配置多实例，所有实例也应位于同一个 `ALIYUN_REGION_ID` 下。跨地域实例建议分别运行多个容器。
+
 ## 环境变量
 
 必填：
