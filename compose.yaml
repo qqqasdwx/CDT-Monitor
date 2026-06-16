@@ -1,0 +1,29 @@
+services:
+  cdt-monitor:
+    image: ghcr.io/qqqasdwx/cdt-monitor:guard
+    container_name: cdt-monitor
+    restart: unless-stopped
+    environment:
+      # Required. Prefer setting real values in .env instead of editing this file.
+      ALIYUN_ACCESS_KEY_ID: ${ALIYUN_ACCESS_KEY_ID}
+      ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET}
+      ALIYUN_REGION_ID: ${ALIYUN_REGION_ID:-cn-hongkong}
+      ECS_INSTANCE_ID: ${ECS_INSTANCE_ID}
+
+      # Traffic threshold in GB. When current CDT traffic reaches this value,
+      # the guard stops the configured ECS instance.
+      CDT_TRAFFIC_THRESHOLD_GB: ${CDT_TRAFFIC_THRESHOLD_GB:-180}
+
+      # keep_running: start ECS when under threshold, stop ECS when over threshold.
+      # protect_only: only stop ECS when over threshold; never auto-start.
+      # dry_run: only log intended actions.
+      CDT_CONTROL_MODE: ${CDT_CONTROL_MODE:-keep_running}
+
+      # Check interval. Minimum accepted by the container is 10 seconds.
+      CDT_CHECK_INTERVAL_SECONDS: ${CDT_CHECK_INTERVAL_SECONDS:-60}
+
+      # KeepCharging keeps resources billed; StopCharging stops billing but may change
+      # non-EIP public IP after restart.
+      ECS_STOPPED_MODE: ${ECS_STOPPED_MODE:-KeepCharging}
+      ECS_FORCE_STOP: ${ECS_FORCE_STOP:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
