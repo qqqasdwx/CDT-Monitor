@@ -194,16 +194,16 @@ ECS_STOPPED_MODE=StopCharging
 
 ## RAM 权限
 
-不要在阿里云控制台里搜索 `cdt:ListCdtInternetTraffic`。CDT 的系统策略使用的是通配权限，例如 `cdt:List*`、`cdt:Describe*`、`cdt:Get*`。
+可以把本镜像需要的 CDT 和 ECS 权限写在一个自定义权限策略里。你截图里的页面就是正确位置：`RAM 访问控制 -> 权限管理 -> 权限策略 -> 创建权限策略 -> 脚本编辑`。
 
-推荐配置方式：
+控制台入口：
 
-1. 给 RAM 用户或角色添加系统策略 `AliyunCDTReadOnlyAccess`。
-2. 再创建一个 ECS 自定义策略，使用“脚本编辑”或“JSON”方式粘贴下面的策略。
+- RAM 权限策略页面：https://ram.console.aliyun.com/policies
+- 官方说明：https://help.aliyun.com/zh/ram/create-a-custom-policy
 
-### `protect_only` 模式
+建议创建一个名为 `CDTGuardPolicy` 的自定义策略，把下面 JSON 粘贴到“脚本编辑”里：
 
-只需要查询实例和停止实例：
+### 完整策略
 
 ```json
 {
@@ -212,8 +212,18 @@ ECS_STOPPED_MODE=StopCharging
     {
       "Effect": "Allow",
       "Action": [
+        "cdt:List*",
+        "cdt:Describe*",
+        "cdt:Get*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
         "ecs:DescribeInstances",
-        "ecs:StopInstance"
+        "ecs:StartInstances",
+        "ecs:StopInstances"
       ],
       "Resource": [
         "acs:ecs:*:*:instance/*"
@@ -223,27 +233,12 @@ ECS_STOPPED_MODE=StopCharging
 }
 ```
 
-### `keep_running` 模式
+这份策略适用于默认的 `keep_running` 模式，因为它需要在低于阈值时启动 ECS，在超过阈值时停止 ECS。
 
-需要查询实例、启动实例和停止实例：
+如果你使用 `protect_only` 模式，并且确认不需要自动启动实例，可以从策略里删除：
 
 ```json
-{
-  "Version": "1",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ecs:DescribeInstances",
-        "ecs:StartInstance",
-        "ecs:StopInstance"
-      ],
-      "Resource": [
-        "acs:ecs:*:*:instance/*"
-      ]
-    }
-  ]
-}
+"ecs:StartInstances"
 ```
 
 如果想进一步收窄 ECS 资源范围，可以把：
@@ -258,26 +253,9 @@ acs:ecs:*:*:instance/*
 acs:ecs:cn-hongkong:<你的阿里云账号ID>:instance/i-xxxxxxxxxxxxxxxxx
 ```
 
-如果不使用系统策略，也可以用 CDT 自定义策略：
+创建完成后，到 RAM 用户或角色的“添加权限”页面，搜索并选择你刚创建的 `CDTGuardPolicy`。
 
-```json
-{
-  "Version": "1",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "cdt:List*",
-        "cdt:Describe*",
-        "cdt:Get*"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-快速跑通但权限较宽的方式是：`AliyunCDTReadOnlyAccess` + `AliyunECSFullAccess`。不建议长期使用。
+如果只是临时快速跑通，也可以直接授权 `AliyunCDTFullAccess` + `AliyunECSFullAccess`，但权限明显更大，不建议长期使用。
 
 ## 测试配置
 
