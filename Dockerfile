@@ -1,32 +1,30 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.24-alpine AS build
+FROM python:3.12-slim
 
 ARG VERSION=dev
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
 
-WORKDIR /src
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    CDT_GUARD_VERSION=${VERSION} \
+    CDT_CHECK_INTERVAL_SECONDS=60 \
+    CDT_CONTROL_MODE=keep_running \
+    CDT_TRAFFIC_THRESHOLD_GB=180 \
+    ECS_STOPPED_MODE=KeepCharging \
+    ECS_FORCE_STOP=false \
+    CDT_HEARTBEAT_FILE=/tmp/cdt-guard-heartbeat
 
-COPY backend/go.mod ./go.mod
-RUN go mod download
+WORKDIR /app
 
-COPY backend/ ./
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
-    -o /out/cdt-monitor ./cmd/server
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
-FROM alpine:3.21
+COPY scripts/cdt_guard.py ./cdt_guard.py
 
-RUN addgroup -S app && adduser -S -G app app
-
-COPY --from=build /out/cdt-monitor /usr/local/bin/cdt-monitor
-
+RUN useradd --create-home --shell /usr/sbin/nologin app
 USER app
-EXPOSE 8080
-ENV PORT=8080
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python /app/cdt_guard.py --healthcheck
 
-ENTRYPOINT ["cdt-monitor"]
+ENTRYPOINT ["python", "/app/cdt_guard.py"]
