@@ -9,7 +9,7 @@
 镜像：
 
 ```bash
-ghcr.io/qqqasdwx/cdt-monitor:dev
+ghcr.io/qqqasdwx/cdt-monitor:guard
 ```
 
 最小运行示例：
@@ -23,7 +23,7 @@ docker run -d \
   -e ALIYUN_REGION_ID="cn-hongkong" \
   -e ECS_INSTANCE_ID="i-xxxxxxxxxxxxxxxxx" \
   -e CDT_TRAFFIC_THRESHOLD_GB="180" \
-  ghcr.io/qqqasdwx/cdt-monitor:dev
+  ghcr.io/qqqasdwx/cdt-monitor:guard
 ```
 
 默认行为：
