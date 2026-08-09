@@ -40,7 +40,7 @@ The following are non-goals unless a new requirement explicitly justifies them:
 ## Repository Structure
 
 ```text
-.github/workflows/docker-image.yml  # Multi-architecture GHCR build
+.github/workflows/docker-image.yml  # amd64 GHCR build
 scripts/cdt_guard.py                # Guard process and healthcheck
 tests/test_cdt_guard.py             # Unit tests with fake cloud and HTTP clients
 Dockerfile                          # Runtime image

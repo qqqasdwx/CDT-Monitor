@@ -8,7 +8,7 @@ CDT Guard 是一个轻量级阿里云 CDT 流量保护守护进程。它通过�
 - `archive/fullstack-console` 保存已经停止维护的 Go + React 管理控制台原型。
 - `fullstack-console-archive-20260809` 是该原型归档时的固定标签。
 
-主分支不再扩展 Web 管理后台。推送到 `master` 后，GitHub Actions 会构建 `linux/amd64`、`linux/arm64` 镜像，并更新 `ghcr.io/qqqasdwx/cdt-monitor:guard`。
+主分支不再扩展 Web 管理后台。推送到 `master` 后，GitHub Actions 会构建 `linux/amd64` 镜像，并更新 `ghcr.io/qqqasdwx/cdt-monitor:guard`。
 
 镜像地址：
 
@@ -216,6 +216,15 @@ UPTIME_KUMA_PUSH_URL=https://kuma.example.com/api/push/your-token?status=up&msg=
 - `ping` 是本轮巡检耗时，单位毫秒。
 
 正常巡检同样会 Push，因此 Uptime Kuma 可以检测守护进程失联。建议把 Kuma 的心跳间隔设为不小于 `CDT_CHECK_INTERVAL_SECONDS`，并留出网络抖动的重试宽限。Push URL 中包含监控令牌，应只保存在被 Git 忽略的 `.env` 中。
+
+使用默认的 60 秒巡检间隔时，推荐的 Kuma 监控参数为：
+
+| 参数 | 推荐值 | 说明 |
+| --- | --- | --- |
+| 显示名称 | `CDT Guard - 香港` | 可将“香港”替换为实例备注或地域 |
+| 心跳间隔 | `90` 秒 | 给 60 秒巡检预留 API 和网络延迟 |
+| 重试次数 | `1` | 容忍一次偶发的 Push 丢失 |
+| 连续失败重复通知间隔 | `0` | 禁用重复通知，避免故障期间反复提醒 |
 
 ## 停机模式
 
