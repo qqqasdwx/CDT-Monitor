@@ -1,270 +1,74 @@
 # AGENTS.md
 
-## 适用范围
+## Scope
 
-本文件用于指导 AI coding agent 在本仓库中进行后续开发、重构和维护。规则适用于整个仓库。
+This repository maintains CDT Guard, a small Python daemon that checks Alibaba Cloud CDT traffic and controls configured ECS instances when the traffic threshold is crossed.
 
-当前仓库仍处于早期阶段。`reference/` 目录只用于理解业务背景和功能边界，不代表本项目要继承其 PHP 技术栈、文件结构或实现方式。
+The active product lives on `master`. The retired Go + React console is preserved on `archive/fullstack-console` and must not be merged back into the active product unless explicitly requested.
 
-## 项目目标
+## Project Boundaries
 
-本项目要做一个轻量级全栈系统，强调简单、清晰、可维护。技术栈固定为：
+Keep the active project focused on one operational loop:
 
-- 前端：React + Vite + TypeScript
-- UI：Tailwind CSS + shadcn/ui
-- 后端：Go
-- 数据库：SQLite
+1. Load configuration from environment variables.
+2. Query current CDT traffic.
+3. Query the configured ECS instance state.
+4. Decide whether an ECS start or stop action is required.
+5. Execute the action and write clear logs.
+6. Expose process health through the container healthcheck.
 
-核心目标：
+Current stack:
 
-- 用清晰的前后端分层实现业务闭环。
-- 保持单体、轻量、低魔法，不追求复杂架构。
-- 让代码容易读、容易改、容易排查问题。
-- 前端保持薄层，后端承担业务规则、权限、校验和持久化。
+- Python 3.12
+- Alibaba Cloud Python SDK
+- Docker and Docker Compose
+- GitHub Actions publishing to GHCR
 
-## 业务背景
+The following are non-goals unless a new requirement explicitly justifies them:
 
-本项目面向阿里云 CDT 和 ECS 使用场景，目标是提供一个自托管的轻量控制台，用于监控云流量、管理 ECS 生命周期，并在接近用户配置的流量额度或费用风险线时执行保护动作。
+- Web UI or HTTP API
+- database persistence
+- account management
+- multi-cloud abstractions
+- notification frameworks
+- workflow engines
+- remote administration
 
-核心业务闭环：
-
-1. 用户配置阿里云账号、区域、实例和流量额度。
-2. 后端定时同步 CDT/ECS 流量、实例状态和必要元数据。
-3. 系统根据阈值、定时任务和保活规则做业务判断。
-4. 达到保护条件时，后端执行停机、通知、记录日志等动作。
-5. 前端只展示状态、配置表单、操作入口和结果反馈。
-
-本项目涉及真实云资源操作。启动、停机、释放、改 IP、改 DNS 等动作必须由后端集中处理，并保留清晰日志。测试和开发默认不得调用真实云 API，除非任务明确要求且使用者已提供专门的测试凭据。
-
-## 当前非目标
-
-- 不做通用云管平台。
-- 不做多云抽象。
-- 不做复杂工作流引擎。
-- 不做企业级 RBAC。
-- 不为未来可能支持的云厂商提前抽象 provider 层。
-- 不追求把 `reference/` 中的所有功能一次性重做。
-
-## 决策优先级
-
-开发时按以下顺序做判断：
-
-1. 满足当前明确需求。
-2. 保持实现简单直接。
-3. 保持前后端职责清晰。
-4. 复用项目已有模式。
-5. 补齐必要类型、错误处理和验证。
-6. 只有在重复和边界都稳定时才抽象。
-
-不要为了未来可能出现的需求提前设计框架、插件系统、复杂权限模型或通用工作流。
-
-## 架构边界
-
-### 前端职责
-
-前端只负责：
-
-- 页面布局和交互
-- 组件组合
-- 表单输入和用户体验校验
-- 调用后端 API
-- 展示服务端数据、加载状态、空状态和错误状态
-
-前端不要负责：
-
-- 最终权限判断
-- 核心业务规则
-- 数据一致性保障
-- 持久化规则
-- 资源状态流转的最终判定
-
-### 后端职责
-
-后端负责：
-
-- HTTP API
-- 认证和权限
-- 参数校验和业务校验
-- 业务逻辑和状态流转
-- SQLite 数据访问和事务
-- 错误响应和日志
-- 与外部服务交互
-
-handler 只处理 HTTP 输入输出；service 处理业务逻辑；store/repository 处理 SQLite。
-
-## 推荐目录结构
-
-仓库尚未形成正式结构时，优先采用下面的结构。已有代码形成稳定约定后，以现有约定为准，但不要随意制造更深层级。
+## Repository Structure
 
 ```text
-frontend/
-  src/
-    api/
-    components/
-    features/
-    hooks/
-    lib/
-    pages/
-    types/
-
-backend/
-  cmd/
-    server/
-  internal/
-    config/
-    http/
-    service/
-    store/
-    migrations/
+.github/workflows/docker-image.yml  # Multi-architecture GHCR build
+scripts/cdt_guard.py                # Guard process and healthcheck
+Dockerfile                          # Runtime image
+compose.yaml                        # Deployment example
+requirements.txt                    # Pinned Python dependencies
+README.md                           # User-facing configuration and operation
 ```
 
-目录含义：
+Do not create additional layers or directories unless they remove real complexity. Small, cohesive helpers may remain in `scripts/cdt_guard.py`; add modules only when the script has clear independent responsibilities that need separate tests.
 
-- `frontend/src/api/`：统一 API client 和各资源 API，不在组件里散落 `fetch`。
-- `frontend/src/components/`：通用 UI 和可复用组件。
-- `frontend/src/features/` 或 `frontend/src/pages/`：业务页面和业务模块。
-- `frontend/src/hooks/`：可复用前端 hooks。
-- `frontend/src/lib/`：工具函数、格式化、常量。
-- `frontend/src/types/`：前端类型和 API DTO 类型。
-- `backend/cmd/server/`：后端启动入口。
-- `backend/internal/http/`：路由、handler、中间件、请求响应 DTO。
-- `backend/internal/service/`：业务逻辑。
-- `backend/internal/store/`：SQLite 查询、事务、持久化。
-- `backend/internal/config/`：配置加载和默认值。
-- `backend/internal/migrations/`：数据库迁移。
+## Development Rules
 
-## 前端规则
+- Preserve existing environment variable names and image behavior unless a change is explicitly documented as breaking.
+- Prefer the Python standard library and existing SDKs over new dependencies.
+- Keep configuration parsing explicit and fail startup on invalid required values.
+- Treat Alibaba Cloud responses as untrusted external input and validate fields before making resource decisions.
+- Never log or commit AccessKey secrets, tokens, `.env` files, or real instance credentials.
+- Keep start and stop actions idempotent by checking instance state first.
+- Let API and configuration failures surface in logs; do not fabricate successful checks or actions.
+- Tests and local development must not call real Alibaba Cloud APIs unless the task explicitly supplies dedicated test credentials.
+- Keep `ghcr.io/qqqasdwx/cdt-monitor:guard` compatible because it is the deployed rolling tag.
 
-- 使用 React Function Components。
-- 使用 TypeScript strict 风格，避免 `any`。确实需要时，将范围限制到最小并说明原因。
-- 使用 Tailwind CSS 写样式。
-- 使用 shadcn/ui 作为基础 UI 组件，不重复造按钮、输入框、弹窗、表格等基础控件。
-- 组件应小而清晰。组件同时承担复杂布局、请求、业务判断时，应拆分。
-- 服务端数据状态优先使用 TanStack Query。
-- 表单优先使用 React Hook Form + Zod。
-- Zod 只做前端输入体验校验，不替代后端校验。
-- API 调用必须集中封装在 `frontend/src/api/`。
-- 组件中不要直接写 `fetch('/api/...')`。
-- 不要把业务规则写进前端组件。
-- 避免 Redux 和复杂全局状态。简单 UI 状态用 React state；少量跨组件状态可用 Context。
+## Validation
 
-## 后端规则
+Run the checks relevant to the change:
 
-- 使用 Go 标准工程风格，代码直接、显式、可追踪。
-- 所有请求链路使用 `context.Context`。
-- handler 只做参数解析、调用 service、返回响应。
-- service 放业务逻辑、权限判断、状态流转和跨 store 编排。
-- store/repository 放 SQL、事务、扫描和持久化。
-- 不要在 handler 中直接写 SQL。
-- 不要在 store 中写业务决策。
-- 错误必须明确返回，不吞错误，不伪造成功。
-- 日志要能定位问题，但不能输出密钥、Token、密码等敏感信息。
-- 配置读取集中在 config 包，不要在业务逻辑中散落读取环境变量。
-- SQLite 访问优先显式 SQL，不引入复杂 ORM，除非项目已有明确约定。
-
-## 数据库规则
-
-- 数据库使用 SQLite。
-- 表结构保持简单，字段含义明确。
-- migration 文件必须可读、按顺序执行、可追踪。
-- 优先写显式 SQL，不要为简单查询创建通用查询框架。
-- 业务实体表通常应包含 `created_at` 和 `updated_at`。
-- 根据真实查询路径添加索引，尤其是外键、唯一键、状态字段和时间字段。
-- 使用外键时，连接必须启用 `PRAGMA foreign_keys = ON`。
-- 事务边界必须清楚，失败时回滚并返回真实错误。
-- 不把测试数据混进正式 migration，除非是系统运行必需的基础数据。
-
-## API 规则
-
-- API 以简单 REST 为主，路径表达资源，HTTP 方法表达动作。
-- 所有 API 返回 JSON。
-- 前后端字段命名保持一致。
-- 后端负责最终校验；前端校验只用于用户体验。
-- 错误响应格式统一：
-
-```json
-{
-  "error": {
-    "code": "validation_failed",
-    "message": "请求参数不合法"
-  }
-}
+```bash
+python -m compileall -q scripts
+docker build -t cdt-monitor:guard-local .
+docker compose -f compose.yaml config
 ```
 
-- 前端不要硬编码接口路径，统一通过 API client 调用。
-- 修改 API 时，同步更新前端 API client、类型定义、调用处和相关测试。
-- 对外错误信息应清楚但不泄露内部实现和敏感信息。
+When tests are present, run them before the image build. For workflow changes, verify the rendered YAML and ensure only `master` publishes the rolling `guard` tag.
 
-## 参考库使用规则
-
-`reference/CDT-Monitor` 和 `reference/ecs-controller` 只能作为业务参考：
-
-- 可以参考功能范围、页面概念、数据字段和定时任务思路。
-- 可以参考阿里云 CDT、ECS、费用、通知、DDNS 等领域流程。
-- 不要直接复制 PHP 架构到本项目。
-- 不要照搬其前端模板、全局状态或接口组织。
-- 迁移功能时，先用 Go 后端和 React 前端重新定义清晰边界。
-
-`reference/cdt.sh` 是早期脚本原型，只能作为“流量超过阈值后控制 ECS”的最小业务思路参考。
-
-## AI Agent 工作流程
-
-开始任务前：
-
-- 先读相关文件，不凭文件名猜实现。
-- 先确认现有目录结构、命名、错误处理和测试命令。
-- 如果涉及 `reference/`，先提炼业务规则，再按本项目技术栈实现。
-
-修改代码时：
-
-- 做最小可行改动。
-- 不重构无关代码。
-- 不移动无关文件。
-- 不引入大型依赖，除非标准库和现有依赖明显不足。
-- 新增功能时同步考虑类型、错误处理、空状态、加载状态和测试。
-- 修改 API 时同步更新前端调用和类型。
-- 遇到不确定业务需求，用简短 TODO 标明待确认点，不要编造复杂逻辑。
-
-完成任务前：
-
-- 检查 diff，确认没有无关修改。
-- 运行最相关验证命令。
-- 如果不能运行验证，说明原因和下一步最小验证方式。
-
-## 验证要求
-
-前端变更后优先运行：
-
-- `npm run typecheck`
-- `npm run build`
-- 项目已有 lint/test 命令
-
-后端变更后优先运行：
-
-- `go test ./...`
-- 必要时运行 `go test -race ./...`
-
-数据库变更后必须验证：
-
-- 空库初始化
-- 旧库迁移路径
-- 关键查询和索引是否匹配业务路径
-
-API 变更后必须验证：
-
-- handler/service/store 能编译
-- 前端 API client 和类型能编译
-- 关键成功和失败响应格式符合约定
-
-## 禁止事项
-
-- 不要引入 Next.js。
-- 不要把后端业务逻辑搬到前端。
-- 不要引入 Redux，除非项目已经使用且有明确必要。
-- 不要引入复杂状态管理、全局事件总线或隐式数据流。
-- 不要引入 Kubernetes、微服务、Kafka、RabbitMQ、分布式任务系统等重型方案。
-- 不要创建过深目录层级。
-- 不要生成大量模板化废代码。
-- 不要为了未来需求提前实现插件系统、复杂权限模型、多租户框架或通用工作流引擎。
-- 不要吞掉错误、伪造成功响应或用静默 fallback 掩盖真实问题。
-- 不要提交、打印或上传真实密钥、Token、密码、`.env` 内容或本地数据库敏感数据。
+Before committing, inspect the diff for credentials, unrelated generated files, stale full-stack references, and undocumented behavior changes.

@@ -2,6 +2,14 @@
 
 CDT Guard 是一个轻量级阿里云 CDT 流量保护守护进程。它通过定时检查 CDT 流量，在达到阈值时自动停止 ECS 实例，降低流量超额后的费用风险。
 
+## 仓库定位
+
+- `master` 是当前维护分支，保存轻量守护脚本和镜像构建配置。
+- `archive/fullstack-console` 保存已经停止维护的 Go + React 管理控制台原型。
+- `fullstack-console-archive-20260809` 是该原型归档时的固定标签。
+
+主分支不再扩展 Web 管理后台。推送到 `master` 后，GitHub Actions 会构建 `linux/amd64`、`linux/arm64` 镜像，并更新 `ghcr.io/qqqasdwx/cdt-monitor:guard`。
+
 镜像地址：
 
 ```bash

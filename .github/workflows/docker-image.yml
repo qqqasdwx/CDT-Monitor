@@ -3,7 +3,7 @@ name: Docker Image
 on:
   push:
     branches:
-      - cdt-guard
+      - master
     tags:
       - "guard-v*.*.*"
   workflow_dispatch:
@@ -42,7 +42,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=guard,enable=${{ github.ref == 'refs/heads/cdt-guard' }}
+            type=raw,value=guard,enable=${{ github.ref == 'refs/heads/master' }}
             type=ref,event=tag
             type=sha,prefix=sha-
 
