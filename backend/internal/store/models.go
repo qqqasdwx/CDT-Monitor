@@ -99,6 +99,7 @@ type Dashboard struct {
 	Accounts    []Account   `json:"accounts"`
 	Instances   []Instance  `json:"instances"`
 	ActionLogs  []ActionLog `json:"actionLogs"`
+	CloudMode   string      `json:"cloudMode"`
 	WebhookURL  string      `json:"webhookUrl"`
 	GeneratedAt time.Time   `json:"generatedAt"`
 }

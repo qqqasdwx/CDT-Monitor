@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +20,8 @@ import (
 )
 
 type noopCloud struct{}
+
+func (noopCloud) Mode() aliyun.Mode { return aliyun.ModeDryRun }
 
 func (noopCloud) QueryTraffic(context.Context, aliyun.AccountCredentials) (aliyun.TrafficUsage, error) {
 	return aliyun.TrafficUsage{}, nil
@@ -179,6 +183,46 @@ func TestLoginRateLimitUsesForwardedForWhenTrusted(t *testing.T) {
 	router.ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
 		t.Fatalf("different forwarded ip login status = %d", res.Code)
+	}
+}
+
+func TestFrontendHandlerServesPagesAndKeepsAPI(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	for _, name := range requiredFrontendFiles {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("<html>"+name+"</html>"), 0o600); err != nil {
+			t.Fatalf("write frontend file: %v", err)
+		}
+	}
+	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	handler, err := NewFrontendHandler(api, root)
+	if err != nil {
+		t.Fatalf("NewFrontendHandler() error = %v", err)
+	}
+
+	pageRequest := httptest.NewRequest(http.MethodGet, "/dashboard.html", nil)
+	pageResponse := httptest.NewRecorder()
+	handler.ServeHTTP(pageResponse, pageRequest)
+	if pageResponse.Code != http.StatusOK || !strings.Contains(pageResponse.Body.String(), "dashboard.html") {
+		t.Fatalf("unexpected page response: %d %q", pageResponse.Code, pageResponse.Body.String())
+	}
+
+	apiRequest := httptest.NewRequest(http.MethodGet, "/api/v1/status", nil)
+	apiResponse := httptest.NewRecorder()
+	handler.ServeHTTP(apiResponse, apiRequest)
+	if apiResponse.Code != http.StatusNoContent {
+		t.Fatalf("API status = %d", apiResponse.Code)
+	}
+}
+
+func TestFrontendHandlerRequiresBuiltPages(t *testing.T) {
+	t.Parallel()
+
+	if _, err := NewFrontendHandler(http.NotFoundHandler(), t.TempDir()); err == nil {
+		t.Fatal("expected missing frontend files error")
 	}
 }
 

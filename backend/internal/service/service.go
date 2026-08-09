@@ -95,6 +95,7 @@ func (s *Service) Status(ctx context.Context) (store.Dashboard, error) {
 		Accounts:    sanitizeAccounts(accounts),
 		Instances:   instances,
 		ActionLogs:  logs,
+		CloudMode:   string(s.cloud.Mode()),
 		WebhookURL:  "/api/webhooks/aliyun/events/" + s.webhookToken(ctx),
 		GeneratedAt: time.Now().UTC(),
 	}, nil
@@ -224,7 +225,10 @@ func (s *Service) SyncNow(ctx context.Context) (SyncResult, error) {
 		return SyncResult{}, err
 	}
 
-	result := SyncResult{Metadata: map[string]interface{}{"dryRun": true}}
+	result := SyncResult{Metadata: map[string]interface{}{
+		"cloudMode": string(s.cloud.Mode()),
+		"dryRun":    s.cloud.Mode() == aliyun.ModeDryRun,
+	}}
 	instancesByAccountRegion := make(map[string][]store.Instance)
 	for _, instance := range instances {
 		if instance.Enabled {
@@ -733,6 +737,9 @@ func validateAccountInput(input AccountInput, requireSecret bool) error {
 	}
 	if strings.TrimSpace(input.Region) == "" {
 		return validation("区域不能为空")
+	}
+	if !aliyun.IsValidRegionID(input.Region) {
+		return validation("区域格式不合法")
 	}
 	return nil
 }

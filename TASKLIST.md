@@ -13,14 +13,14 @@
 
 ## 当前生产化缺口
 
-- [ ] 接入真实阿里云 CDT 流量查询，并覆盖鉴权、限流和分页错误。
-- [ ] 接入真实阿里云 ECS 状态查询。
-- [ ] 接入真实 ECS 启动和停止操作，同时保留默认启用的 dry-run 模式。
+- [x] 接入真实阿里云 CDT 流量查询，并覆盖鉴权、限流和响应校验。
+- [x] 接入真实阿里云 ECS 状态查询。
+- [x] 接入真实 ECS 启动和停止操作，同时保留默认启用的 dry-run 模式和 read-only 模式。
 - [ ] 接入真实 BssOpenApi 余额查询。
 - [ ] 接入 Cloudflare DNS API，完成真实 DDNS 更新。
 - [ ] 接入 Telegram Bot API 或 webhook。
 - [ ] 接入邮件 SMTP 发送器。
-- [ ] 提供可复现的生产构建和 Docker Compose 部署方案。
+- [x] 提供可复现的生产构建和 Docker Compose 部署方案。
 - [ ] 完成真实云环境端到端验收。
 
 阶段推进规则：
@@ -105,6 +105,9 @@
 - [x] 定义阿里云 ECS 查询接口和 dry-run 实现。
 - [x] 定义 ECS 启动接口和 dry-run 实现。
 - [x] 定义 ECS 停止接口和 dry-run 实现，支持 `StopCharging` 和 `KeepCharging`。
+- [x] 使用阿里云官方 OpenAPI SDK 实现真实 CDT 和 ECS 查询。
+- [x] 实现 `read-only` 模式，确保真实查询阶段禁止 ECS 变更。
+- [x] 实现 `live` 模式的 ECS 启停，并向 StopInstance 传递停机模式。
 - [x] 为阿里云 API 错误建立明确错误类型或错误码映射。
 - [x] 确保日志和错误响应不泄露 AccessKey Secret。
 

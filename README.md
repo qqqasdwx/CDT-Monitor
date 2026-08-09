@@ -46,6 +46,7 @@ npm run dev
 
 - `CDTM_PORT`：HTTP 端口，默认 `8080`
 - `CDTM_DATABASE_PATH`：SQLite 数据库路径，默认 `data/cdt-monitor.sqlite`
+- `CDTM_FRONTEND_DIR`：生产前端构建目录；为空时只提供 API
 - `CDTM_SECRET_KEY_PATH`：本地加密密钥文件路径，默认 `data/secret.key`
 - `CDTM_ADMIN_PASSWORD`：管理员登录密码，必须设置；未设置时后端拒绝启动
 - `CDTM_SESSION_KEY_PATH`：会话签名密钥文件路径，默认 `data/session.key`
@@ -55,9 +56,40 @@ npm run dev
 - `CDTM_LOGIN_WINDOW`：登录失败统计窗口，默认 `15m`
 - `CDTM_LOGIN_LOCKOUT`：触发限速后的锁定时间，默认 `15m`
 - `CDTM_TRUST_PROXY_HEADERS`：是否信任 `X-Forwarded-For` / `X-Real-IP` 作为客户端 IP，默认 `false`
+- `CDTM_ALIYUN_MODE`：阿里云运行模式，支持 `dry-run`、`read-only`、`live`，默认 `dry-run`
+- `CDTM_ALIYUN_CONNECT_TIMEOUT`：阿里云 API 连接超时，默认 `5s`
+- `CDTM_ALIYUN_READ_TIMEOUT`：阿里云 API 读取超时，默认 `10s`
 - `CDTM_SYNC_INTERVAL`：周期同步间隔，默认 `5m`
 - `CDTM_KEEPALIVE_INTERVAL`：保活兜底巡检间隔，默认 `10m`
 - `CDTM_LOG_LEVEL`：日志级别，支持 `debug`、`info`、`warn`、`error`
+
+## 阿里云运行模式
+
+- `dry-run`：不调用阿里云 API，查询返回模拟数据，启停只记录日志。默认使用此模式。
+- `read-only`：真实查询 CDT 流量和 ECS 状态，但所有 ECS 启停操作都会被后端拒绝。
+- `live`：真实查询 CDT/ECS，并允许阈值保护、保活、定时任务和手动操作启停 ECS。
+
+首次接入账号时应先使用 `read-only`，确认区域、实例和流量口径正确后再切换到 `live`。模式由服务启动配置决定，前端 Dashboard 会显示当前模式；`live` 模式下手动启停会要求再次确认。
+
+当前真实查询使用阿里云 OpenAPI `ListCdtInternetTraffic` 和 `DescribeInstanceStatus`。CDT 流量按目标实例所属的国内或海外区域归类汇总。BssOpenApi 余额查询仍未接入真实模式，因为账号还没有独立的中国站/国际站属性。
+
+## Docker Compose 部署
+
+生产镜像由 Go 单体同时提供前端静态文件和 API，SQLite、加密密钥、会话密钥保存在 Docker 命名卷中。
+
+```bash
+cp .env.example .env
+# 编辑 .env，至少替换管理员密码并确认阿里云模式
+docker compose up -d --build
+```
+
+Compose 默认监听 `127.0.0.1:8080`，适合由同机反向代理提供 HTTPS。反向代理必须覆盖客户端传入的转发头后，才能设置 `CDTM_TRUST_PROXY_HEADERS=true`。HTTPS 部署应保持 `CDTM_SECURE_SESSION_COOKIE=true`。
+
+构建完成后访问：
+
+- `http://127.0.0.1:8080/login.html`
+- `http://127.0.0.1:8080/dashboard.html`
+- `http://127.0.0.1:8080/settings.html`
 
 ## 访问控制
 
@@ -73,7 +105,7 @@ npm run dev
 
 已实现基础工程、SQLite migration、密码登录与会话保护、账号和实例配置 API、周期同步、手动同步、阈值保护判断、手动启动/停止 API、动作日志、云监控事件 webhook、Stopped 事件保活、低频保活巡检、通知通道、历史趋势、日志清理、定时开关机和月初恢复，以及对应的多页面前端入口。
 
-当前阿里云客户端处于 dry-run 模式，不会调用真实云 API。它用于验证系统闭环、前端交互、数据库迁移和动作日志。接入真实阿里云 CDT/ECS SDK 前，开发环境默认不会操作真实 ECS 资源。
+阿里云客户端支持 `dry-run`、`read-only` 和 `live` 三种模式。默认 `dry-run` 不会调用真实云 API；只有显式设置 `CDTM_ALIYUN_MODE=live` 才允许操作真实 ECS 资源。
 
 ## 阿里云云监控事件订阅
 
@@ -89,11 +121,13 @@ npm run dev
 
 ## 费用接口边界
 
-费用状态使用阿里云费用与成本 BssOpenApi 的账户余额方向建模，核心接口为 `QueryAccountBalance`；账单明细后续可扩展到 `QueryAccountBill` 或 `QueryInstanceBill`。当前实现保留 dry-run 客户端，不会调用真实费用 API。费用同步失败只写入动作日志，不影响 CDT 流量保护和 ECS 控制闭环。
+费用状态使用阿里云费用与成本 BssOpenApi 的账户余额方向建模，核心接口为 `QueryAccountBalance`；账单明细后续可扩展到 `QueryAccountBill` 或 `QueryInstanceBill`。当前真实模式会明确拒绝费用同步，不会用零余额伪造成功。费用同步失败只写入动作日志，不影响 CDT 流量保护和 ECS 控制闭环。
 
 ## 验证命令
 
 ```bash
 cd backend && go test ./...
 cd frontend && npm run lint && npm run build
+docker compose --env-file .env.example config
+docker compose --env-file .env.example build
 ```

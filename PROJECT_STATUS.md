@@ -6,7 +6,7 @@
 
 CDT-Monitor 是一个轻量级自托管控制台，用于监控阿里云 CDT 流量、管理 ECS 生命周期，并在达到配置阈值时执行保护动作。项目技术栈已经固定为 Go 后端、SQLite 数据库、React + Vite + TypeScript 前端。
 
-当前代码已经搭起完整的前后端骨架和业务闭环原型，但外部云服务仍以 dry-run 和本地数据流为主。也就是说，系统已经能验证页面、API、数据库、调度器、权限和日志链路，但还不能直接视为可操作真实阿里云资源的生产版本。
+当前代码已经搭起完整的前后端骨架和业务闭环，并接入真实阿里云 CDT/ECS OpenAPI。系统仍需要使用专门的测试账号完成真实环境验收，未经验收前不应直接切换到 `live` 模式投入无人值守运行。
 
 ## 已开发内容
 
@@ -55,6 +55,14 @@ SQLite migration 已覆盖主要业务表：
 - 已实现自动保护停机后的状态标记，避免保活逻辑误启动。
 - 已实现低频保活巡检、webhook 事件保活和冷却时间判断。
 
+### 真实阿里云接入
+
+- 已使用阿里云官方 OpenAPI SDK 接入 `ListCdtInternetTraffic` 和 `DescribeInstanceStatus`。
+- CDT 流量按目标实例所属的国内或海外区域归类汇总，异常响应会明确失败，不会继续触发保护动作。
+- 已接入真实 `StartInstance` 和 `StopInstance`，支持 `KeepCharging`、`StopCharging`。
+- 已提供 `dry-run`、`read-only`、`live` 三档模式，默认 `dry-run`；`read-only` 会在后端阻断所有云资源变更。
+- Dashboard 会显示当前运行模式，只读模式禁用启停按钮，真实模式手动操作需要再次确认。
+
 ### 事件监听和日志
 
 - 已实现阿里云云监控事件 webhook：`POST /api/webhooks/aliyun/events/:token`。
@@ -69,6 +77,13 @@ SQLite migration 已覆盖主要业务表：
 - Settings 页面已实现账号配置、实例配置、系统设置、定时任务、DDNS、通知通道等配置入口。
 - 前端 API 调用集中在 `frontend/src/api/client.ts`，请求默认携带 Cookie。
 
+### 生产部署
+
+- 已提供多阶段 `Dockerfile`，构建 React 静态资源和 Go 二进制。
+- Go 服务可通过 `CDTM_FRONTEND_DIR` 同时托管多页面前端和 API。
+- 已提供 `docker-compose.yml` 和 `.env.example`，SQLite、加密密钥、会话密钥使用命名卷持久化。
+- Compose 默认只绑定 `127.0.0.1`，并启用只读根文件系统、删除 Linux capabilities 和 `no-new-privileges`。
+
 ### 增强功能原型
 
 - 系统设置已建模，包括默认同步频率、默认阈值、默认停机模式、默认保活开关、保活冷却时间和日志保留天数。
@@ -80,16 +95,11 @@ SQLite migration 已覆盖主要业务表：
 
 ## 已规划但尚未真正落地
 
-### 真实阿里云 API
+### 真实费用查询
 
-当前 `backend/internal/aliyun/client.go` 使用 `DryRunClient`：
-
-- `QueryTraffic` 固定返回 0 流量。
-- `QueryInstanceStatus` 固定返回 `Running`。
-- `QueryAccountBalance` 固定返回 0 余额。
-- `StartInstance` 和 `StopInstance` 只写 dry-run 日志，不调用真实 ECS API。
-
-因此，CDT 查询、ECS 状态查询、ECS 启停和费用查询都还是接口形状和本地业务流程，尚未接入真实阿里云 SDK 或 OpenAPI。
+- BssOpenApi 余额模型和本地快照流程已经存在。
+- 真实模式尚未调用 `QueryAccountBalance`，因为账号模型还没有中国站/国际站属性，不能可靠选择费用中心 endpoint。
+- 真实模式会明确返回不支持错误，不会将余额伪造成 0。
 
 ### 真实通知发送
 
@@ -120,34 +130,29 @@ SQLite migration 已覆盖主要业务表：
 
 这些功能需要在真实阿里云 API、权限边界、二次确认和回滚策略明确后再实现。
 
-### 生产部署
-
-- README 已提供本地开发命令。
-- 尚未形成完整生产部署方案，例如 Dockerfile、docker-compose、静态前端构建托管、后端静态文件服务、systemd 或反向代理示例。
-- HTTPS 当前假定由外部反向代理提供，后端只负责 Cookie 的 `Secure` 配置开关。
-
 ### 测试和验收
 
-- 后端已有部分测试文件。
-- 前端构建、lint 命令已配置。
-- 真实云 API 集成、Webhook 真实回调、浏览器端关键流程、生产部署启动路径仍需要补充端到端验证。
+- 后端测试覆盖核心业务、认证限速、CDT 响应聚合、ECS 状态解析、只读模式阻断和真实停机参数。
+- 前端 lint 和生产构建已经通过。
+- Docker 镜像和 Compose 配置已经在本机完成构建验证；临时容器的健康检查、静态多页面、登录 Cookie、受保护 API 和数据卷重建路径均已验证。
+- 真实云 API、Webhook 回调和浏览器关键流程仍需要使用专门测试凭据完成端到端验证。
 
 ## 需要讨论或确认的问题
 
 ### MVP 边界
 
-第一版应先收敛到最小可用闭环：
+第一版代码已经收敛到以下最小闭环：
 
 1. 真实查询 CDT 流量。
 2. 真实查询 ECS 状态。
 3. 超阈值后真实停止 ECS。
 4. 动作可审计，失败可排查。
 
-费用、DDNS、Telegram、高风险 ECS 操作可以继续保留为后续增强，不建议阻塞第一版。
+上述能力已经完成代码接入，但尚未完成真实账号验收。费用、DDNS、Telegram、高风险 ECS 操作继续保留为后续增强，不阻塞第一版。
 
 ### 阿里云权限边界
 
-接入真实阿里云前需要确认 RAM 权限范围：
+真实环境验收前需要确认 RAM 权限范围：
 
 - CDT 流量查询需要哪些只读权限。
 - ECS Describe、Start、Stop 需要哪些最小权限。
@@ -166,14 +171,7 @@ SQLite migration 已覆盖主要业务表：
 
 ### 部署形态
 
-需要确认最终部署方式：
-
-- 继续 Go + SQLite 单体自托管。
-- 后端是否同时托管前端静态文件。
-- 是否提供 Docker Compose。
-- 是否需要迁移到 Cloudflare Worker + D1。
-
-当前项目包含定时任务、SQLite、本地密钥文件、后台调度和潜在真实云 API 调用，继续使用 Go 单体会更直接。Worker 方案需要重新评估定时任务、数据库、密钥管理、云 API SDK 兼容性和前后端部署边界。
+当前部署形态已确定为 Go + SQLite 单体自托管，由 Go 同时提供前端静态文件和 API，并通过 Docker Compose 管理。Cloudflare Worker + D1 不进入当前版本。
 
 ### 通知优先级
 
@@ -194,29 +192,17 @@ SQLite migration 已覆盖主要业务表：
 - 是否只做只读预览和审计。
 - 是否要求二次确认、冷却时间、权限分离或额外管理员确认。
 
-### 任务清单状态修正
-
-`TASKLIST.md` 中许多阶段已经标记为完成，但实际含义更接近“代码结构和原型链路已完成”。在接入真实阿里云、Cloudflare、SMTP、Telegram 之前，不应把这些项目理解为生产能力完成。
-
-建议后续把任务状态拆成：
-
-- 已完成：本地工程、API、数据库、前端页面和 dry-run 闭环。
-- 待集成：真实外部服务调用。
-- 待验收：真实环境端到端验证。
-
 ## 当前主要风险
 
-- dry-run 客户端与真实云 API 行为可能存在差异，错误码、分页、限流、权限和状态流转都需要重新验证。
-- 任务清单状态偏乐观，容易让接手者误以为真实云资源操作已经可用。
-- 外部集成缺口较多，尤其是阿里云 SDK、Cloudflare DNS、SMTP、Telegram Bot。
+- 真实阿里云调用尚未使用专门测试账号验收，错误码、权限、限流和 CDT 实际响应仍可能与参考数据不同。
+- `live` 模式会允许调度器、保活和阈值保护操作真实 ECS，切换前必须先在 `read-only` 模式核对数据。
+- 外部集成仍有缺口，包括 BssOpenApi、Cloudflare DNS、SMTP、Telegram Bot。
 - 公网暴露时，内置登录需要配合强密码、HTTPS、限速、可信反代配置和 webhook token 管理。
-- 当前大量实现文件仍处于未跟踪状态，正式推进前需要整理 Git diff，避免混入无关改动。
+- Webhook 真实回调和生产反向代理路径还没有端到端验收。
 
 ## 推荐下一步
 
-1. 修正 `TASKLIST.md`，把“原型完成”和“生产可用”区分开。
-2. 先接入真实阿里云只读能力：CDT 流量查询、ECS 状态查询、费用查询可后置。
-3. 在只读同步稳定后，接入真实 ECS StopInstance，并保留明确 dry-run 开关。
-4. 做一个最小生产部署路径：后端托管 API，前端静态构建，SQLite 数据目录和密钥目录明确持久化。
-5. 保留内置密码登录作为基础安全方案，公网部署时优先叠加强密码、HTTPS、登录限速和可信反代配置；TOTP 和 Cloudflare Access 作为后续增强决策。
-6. 暂缓高风险 ECS 操作、Cloudflare DDNS 和 Telegram 远程控制，等核心保护闭环真实可用后再逐项落地。
+1. 使用最小 RAM 权限的专门测试账号，在 `read-only` 模式验证 CDT 流量和 ECS 状态。
+2. 使用非关键测试实例切换到 `live`，分别验证手动停止、保护停止和保活启动。
+3. 验证阿里云云监控 Webhook 的真实 payload 和反向代理转发路径。
+4. 明确账号中国站/国际站属性后接入 BssOpenApi；DDNS、SMTP、Telegram 继续后置。

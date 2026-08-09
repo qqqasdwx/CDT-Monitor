@@ -10,6 +10,7 @@ import {
   Play,
   RefreshCcw,
   Settings,
+  ShieldCheck,
 } from 'lucide-react'
 import { api, ApiError, isUnauthorized, redirectToLogin } from '../../api/client'
 import { Button } from '../../components/ui/button'
@@ -135,6 +136,7 @@ export function DashboardPage() {
     return min === 0 ? instance.trafficLimitBytes : Math.min(min, instance.trafficLimitBytes)
   }, 0)
   const webhookUrl = statusQuery.data?.webhookUrl ?? ''
+  const cloudMode = statusQuery.data?.cloudMode ?? 'dry-run'
   const authError = firstUnauthorized(
     statusQuery.error,
     cloudEventsQuery.error,
@@ -165,6 +167,20 @@ export function DashboardPage() {
     syncCosts.error,
   )
 
+  const requestStart = (id: string) => {
+    if (cloudMode === 'live' && !window.confirm('确认启动这个 ECS 实例？')) {
+      return
+    }
+    startInstance.mutate(id)
+  }
+
+  const requestStop = (id: string) => {
+    if (cloudMode === 'live' && !window.confirm('确认停止这个 ECS 实例？')) {
+      return
+    }
+    stopInstance.mutate(id)
+  }
+
   return (
     <main className="min-h-screen bg-[#f6f8f9]">
       <header className="border-b border-[#dbe3e6] bg-white">
@@ -175,6 +191,7 @@ export function DashboardPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge ok={!statusQuery.isError} loading={statusQuery.isFetching} />
+            <CloudModeBadge mode={cloudMode} />
             <Button onClick={() => syncNow.mutate()} disabled={syncNow.isPending} variant="secondary">
               <RefreshCcw className="h-4 w-4" />
               手动同步
@@ -210,9 +227,10 @@ export function DashboardPage() {
         />
         <InstanceList
           instances={filteredInstances}
-          onStart={(id) => startInstance.mutate(id)}
-          onStop={(id) => stopInstance.mutate(id)}
+          onStart={requestStart}
+          onStop={requestStop}
           actionPending={startInstance.isPending || stopInstance.isPending}
+          operationsEnabled={cloudMode !== 'read-only'}
         />
         <HistoryPanel
           traffic={trafficTrend}
@@ -350,6 +368,25 @@ function StatusBadge({ ok, loading }: { ok: boolean; loading: boolean }) {
   )
 }
 
+function CloudModeBadge({ mode }: { mode: 'dry-run' | 'read-only' | 'live' }) {
+  const labels = {
+    'dry-run': '演练模式',
+    'read-only': '只读模式',
+    live: '真实操作',
+  }
+  const colors = {
+    'dry-run': 'border-[#b9d9d4] bg-[#eef8f6] text-[#0f766e]',
+    'read-only': 'border-[#cbd5d9] bg-[#f8fafb] text-[#40555c]',
+    live: 'border-[#f5b7b1] bg-[#fff4f2] text-[#b42318]',
+  }
+  return (
+    <div className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm ${colors[mode]}`}>
+      <ShieldCheck className="h-4 w-4" />
+      {labels[mode]}
+    </div>
+  )
+}
+
 function Summary({ instances, logs }: { instances: Instance[]; logs: ActionLog[] }) {
   const traffic = instances.reduce((max, item) => Math.max(max, item.lastTrafficBytes), 0)
   const protectedStops = logs.filter((log) => log.actionType === 'auto_stop_instance').length
@@ -385,11 +422,13 @@ function InstanceList({
   onStart,
   onStop,
   actionPending,
+  operationsEnabled,
 }: {
   instances: Instance[]
   onStart: (id: string) => void
   onStop: (id: string) => void
   actionPending: boolean
+  operationsEnabled: boolean
 }) {
   return (
     <Card>
@@ -440,11 +479,21 @@ function InstanceList({
                   <td className="px-5 py-4 text-[#40555c]">{formatTime(instance.lastSyncedAt)}</td>
                   <td className="px-5 py-4">
                     <div className="flex gap-2">
-                      <Button variant="secondary" onClick={() => onStart(instance.id)} disabled={actionPending}>
+                      <Button
+                        variant="secondary"
+                        onClick={() => onStart(instance.id)}
+                        disabled={actionPending || !operationsEnabled}
+                        title={operationsEnabled ? '启动实例' : '只读模式禁止云资源操作'}
+                      >
                         <Play className="h-4 w-4" />
                         启动
                       </Button>
-                      <Button variant="danger" onClick={() => onStop(instance.id)} disabled={actionPending}>
+                      <Button
+                        variant="danger"
+                        onClick={() => onStop(instance.id)}
+                        disabled={actionPending || !operationsEnabled}
+                        title={operationsEnabled ? '停止实例' : '只读模式禁止云资源操作'}
+                      >
                         <Pause className="h-4 w-4" />
                         停止
                       </Button>

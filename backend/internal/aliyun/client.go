@@ -4,10 +4,47 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"cdt-monitor/backend/internal/logger"
 )
+
+type Mode string
+
+const (
+	ModeDryRun   Mode = "dry-run"
+	ModeReadOnly Mode = "read-only"
+	ModeLive     Mode = "live"
+)
+
+func ParseMode(value string) (Mode, error) {
+	mode := Mode(strings.ToLower(strings.TrimSpace(value)))
+	switch mode {
+	case ModeDryRun, ModeReadOnly, ModeLive:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("invalid aliyun mode %q: expected dry-run, read-only, or live", value)
+	}
+}
+
+func IsValidRegionID(value string) bool {
+	value = strings.TrimSpace(value)
+	if len(value) < 3 || len(value) > 63 {
+		return false
+	}
+	for index, char := range value {
+		isLetter := char >= 'a' && char <= 'z'
+		isDigit := char >= '0' && char <= '9'
+		if !isLetter && !isDigit && char != '-' {
+			return false
+		}
+		if char == '-' && (index == 0 || index == len(value)-1) {
+			return false
+		}
+	}
+	return true
+}
 
 type AccountCredentials struct {
 	AccessKeyID     string
@@ -49,10 +86,12 @@ func IsAuthError(err error) bool {
 	if !errors.As(err, &apiErr) {
 		return false
 	}
-	return apiErr.Code == "InvalidAccessKeyId.NotFound" ||
-		apiErr.Code == "InvalidAccessKeySecret" ||
-		apiErr.Code == "Forbidden" ||
-		apiErr.Code == "NoPermission"
+	code := strings.ToLower(apiErr.Code)
+	return strings.Contains(code, "invalidaccesskey") ||
+		strings.Contains(code, "signaturedoesnotmatch") ||
+		strings.Contains(code, "forbidden") ||
+		strings.Contains(code, "nopermission") ||
+		strings.Contains(code, "accessdenied")
 }
 
 type StopMode string
@@ -63,6 +102,7 @@ const (
 )
 
 type Client interface {
+	Mode() Mode
 	QueryTraffic(ctx context.Context, account AccountCredentials) (TrafficUsage, error)
 	QueryInstanceStatus(ctx context.Context, account AccountCredentials, instanceID string) (InstanceStatus, error)
 	QueryAccountBalance(ctx context.Context, account AccountCredentials) (CostSnapshot, error)
@@ -76,6 +116,10 @@ type DryRunClient struct {
 
 func NewDryRunClient(logger *logger.Logger) *DryRunClient {
 	return &DryRunClient{logger: logger}
+}
+
+func (c *DryRunClient) Mode() Mode {
+	return ModeDryRun
 }
 
 func (c *DryRunClient) QueryTraffic(_ context.Context, account AccountCredentials) (TrafficUsage, error) {

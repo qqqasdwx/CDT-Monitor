@@ -37,7 +37,27 @@ func main() {
 	}
 
 	repo := store.New(db)
-	cloud := aliyun.NewDryRunClient(log)
+	aliyunMode, err := aliyun.ParseMode(cfg.AliyunMode)
+	if err != nil {
+		log.Error("configure aliyun client", "error", err.Error(), "env", "CDTM_ALIYUN_MODE")
+		os.Exit(1)
+	}
+	var cloud aliyun.Client
+	if aliyunMode == aliyun.ModeDryRun {
+		cloud = aliyun.NewDryRunClient(log)
+	} else {
+		cloud, err = aliyun.NewOpenAPIClient(aliyunMode, aliyun.OpenAPIOptions{
+			ConnectTimeout: cfg.AliyunConnect,
+			ReadTimeout:    cfg.AliyunRead,
+		})
+		if err != nil {
+			log.Error("configure aliyun client", "error", err.Error())
+			os.Exit(1)
+		}
+	}
+	if aliyunMode == aliyun.ModeLive {
+		log.Warn("aliyun live mode enabled; cloud mutations are active")
+	}
 	codec, err := secrets.LoadCodec(cfg.SecretKeyPath)
 	if err != nil {
 		log.Error("load secret codec", "error", err.Error())
@@ -65,6 +85,14 @@ func main() {
 		TrustProxy:  cfg.TrustProxyHeaders,
 	})
 	app := service.New(repo, cloud, codec, log)
+	handler := httpapi.NewRouter(app, sessionManager, loginLimiter, log)
+	if cfg.FrontendDir != "" {
+		handler, err = httpapi.NewFrontendHandler(handler, cfg.FrontendDir)
+		if err != nil {
+			log.Error("configure frontend", "error", err.Error(), "directory", cfg.FrontendDir)
+			os.Exit(1)
+		}
+	}
 
 	worker := scheduler.New(app, cfg.SyncInterval, cfg.KeepaliveInterval, log)
 	worker.Start()
@@ -72,13 +100,13 @@ func main() {
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpapi.NewRouter(app, sessionManager, loginLimiter, log),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info("server listening", "addr", server.Addr, "database", cfg.DatabasePath)
+		log.Info("server listening", "addr", server.Addr, "database", cfg.DatabasePath, "frontend", cfg.FrontendDir, "aliyun_mode", string(aliyunMode))
 		errCh <- server.ListenAndServe()
 	}()
 

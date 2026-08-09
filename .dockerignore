@@ -1,0 +1,13 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+data
+reference
+frontend/node_modules
+frontend/dist
+backend/bin
+coverage.out
+*.sqlite
+*.sqlite-*

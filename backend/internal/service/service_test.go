@@ -23,6 +23,10 @@ type fakeCloud struct {
 	stopMode     aliyun.StopMode
 }
 
+func (f *fakeCloud) Mode() aliyun.Mode {
+	return aliyun.ModeDryRun
+}
+
 func (f *fakeCloud) QueryTraffic(context.Context, aliyun.AccountCredentials) (aliyun.TrafficUsage, error) {
 	now := time.Now().UTC()
 	return aliyun.TrafficUsage{

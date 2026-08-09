@@ -160,6 +160,7 @@ export type Dashboard = {
   accounts: Account[] | null
   instances: Instance[] | null
   actionLogs: ActionLog[] | null
+  cloudMode: 'dry-run' | 'read-only' | 'live'
   webhookUrl: string
   generatedAt: string
 }
