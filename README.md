@@ -25,13 +25,15 @@ ghcr.io/qqqasdwx/cdt-monitor:guard
 - 定时查询阿里云 CDT 总流量。
 - 查询指定 ECS 实例状态。
 - 按流量阈值自动启动或停止 ECS。
-- 支持单实例和多实例。
+- 只管理一个明确配置的 ECS 实例。
 - 支持三种控制模式：`keep_running`、`protect_only`、`dry_run`。
 - 支持普通停机和节省停机。
 - 支持强制停机开关。
 - 支持只执行一轮后退出，便于测试。
+- 支持把每轮巡检和控制结果汇总到一个 Uptime Kuma Push 监控。
 - 支持 Docker Compose 部署。
-- 容器内置 heartbeat healthcheck。
+- 所有阿里云 API 请求强制使用 HTTPS。
+- 容器内置基于最后一次成功巡检的 heartbeat healthcheck。
 
 默认行为：
 
@@ -48,7 +50,7 @@ CDT 流量 >= 阈值 -> 尝试停止 ECS
 - 没有数据库。
 - 没有账号管理页面。
 - 没有历史图表。
-- 没有邮件、Telegram、Webhook 通知。
+- 没有邮件、Telegram 或通用 Webhook 通知。
 - 没有云监控事件订阅 webhook 秒级保活。
 - 没有定时开关机。
 - 没有费用和余额查询。
@@ -85,7 +87,7 @@ docker rm -f cdt-monitor
 
 仓库提供了 [compose.yaml](./compose.yaml) 示例。
 
-建议在同目录创建 `.env`：
+复制 [.env.example](./.env.example) 的字段，在同目录创建 `.env`：
 
 ```env
 ALIYUN_ACCESS_KEY_ID=your-access-key-id
@@ -93,7 +95,8 @@ ALIYUN_ACCESS_KEY_SECRET=your-access-key-secret
 ALIYUN_REGION_ID=cn-hongkong
 ECS_INSTANCE_ID=i-xxxxxxxxxxxxxxxxx
 CDT_TRAFFIC_THRESHOLD_GB=180
-CDT_CONTROL_MODE=protect_only
+CDT_CONTROL_MODE=keep_running
+UPTIME_KUMA_PUSH_URL=https://kuma.example.com/api/push/replace-me?status=up&msg=OK&ping=
 ```
 
 启动：
@@ -136,8 +139,6 @@ docker compose up -d
 
 注意：`ALIYUN_REGION_ID` 不是可用区 ID。不要填写 `cn-hongkong-b` 这类可用区 ID。
 
-如果使用 `ECS_INSTANCE_IDS` 配置多实例，所有实例也应位于同一个 `ALIYUN_REGION_ID` 下。跨地域实例建议分别运行多个容器。
-
 ## 环境变量
 
 必填：
@@ -147,13 +148,12 @@ docker compose up -d
 | `ALIYUN_ACCESS_KEY_ID` | 阿里云 AccessKey ID |
 | `ALIYUN_ACCESS_KEY_SECRET` | 阿里云 AccessKey Secret |
 | `ALIYUN_REGION_ID` | ECS 所在区域，例如 `cn-hongkong` |
-| `ECS_INSTANCE_ID` | ECS 实例 ID |
+| `ECS_INSTANCE_ID` | 唯一受控的 ECS 实例 ID |
 
 可选：
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `ECS_INSTANCE_IDS` | 空 | 多实例 ID，英文逗号分隔；设置后优先于 `ECS_INSTANCE_ID` |
 | `CDT_TRAFFIC_THRESHOLD_GB` | `180` | CDT 流量阈值，单位 GB |
 | `CDT_CHECK_INTERVAL_SECONDS` | `60` | 检查间隔，最低 10 秒 |
 | `CDT_CONTROL_MODE` | `keep_running` | 控制模式，见下文 |
@@ -161,6 +161,7 @@ docker compose up -d
 | `ECS_STOPPED_MODE` | `StopCharging` | 停机模式：`StopCharging` 或 `KeepCharging` |
 | `ECS_FORCE_STOP` | `false` | 是否强制停机 |
 | `RUN_ONCE` | `false` | 只执行一轮后退出 |
+| `UPTIME_KUMA_PUSH_URL` | 空 | 单个 Uptime Kuma Push 监控的完整 URL |
 | `LOG_LEVEL` | `INFO` | 日志级别 |
 
 ## 控制模式
@@ -199,15 +200,22 @@ CDT 流量 >= 阈值 -> 尝试停止 ECS
 CDT_DRY_RUN=true
 ```
 
-## 多实例
+## Uptime Kuma Push
 
-使用英文逗号分隔：
+在 Uptime Kuma 中创建一个 `Push` 类型监控，复制它生成的完整 Push URL，并配置：
 
 ```env
-ECS_INSTANCE_IDS=i-xxx1,i-xxx2,i-xxx3
+UPTIME_KUMA_PUSH_URL=https://kuma.example.com/api/push/your-token?status=up&msg=OK&ping=
 ```
 
-如果同时设置了 `ECS_INSTANCE_IDS` 和 `ECS_INSTANCE_ID`，优先使用 `ECS_INSTANCE_IDS`。
+守护进程只使用这一个 URL，每轮巡检只发送一次汇总：
+
+- CDT 查询、ECS 状态查询和所需启停动作均成功时发送 `status=up`。
+- 流量响应异常、实例状态查询失败或启停提交失败时发送 `status=down`。
+- `msg` 使用中文，包含本轮流量、阈值、实例状态和动作摘要。
+- `ping` 是本轮巡检耗时，单位毫秒。
+
+正常巡检同样会 Push，因此 Uptime Kuma 可以检测守护进程失联。建议把 Kuma 的心跳间隔设为不小于 `CDT_CHECK_INTERVAL_SECONDS`，并留出网络抖动的重试宽限。Push URL 中包含监控令牌，应只保存在被 Git 忽略的 `.env` 中。
 
 ## 停机模式
 
@@ -304,9 +312,16 @@ docker run --rm \
   ghcr.io/qqqasdwx/cdt-monitor:guard
 ```
 
+仓库单元测试使用假客户端，不会调用真实阿里云 API：
+
+```bash
+python -m unittest discover -s tests -v
+```
+
 ## 注意事项
 
-- CDT 流量是账号维度数据，不是单实例精确流量。多个实例共用同一账号额度时，要谨慎设置阈值。
+- CDT 流量是账号维度数据，不是受控实例的精确流量；同账号其他资源产生的 CDT 流量也会计入总量。
+- 每轮只查询一次当前 AccessKey 所属账号的 CDT 总流量，再对唯一配置的 ECS 实例执行判断。
 - 当前守护进程依赖轮询，不是秒级事件监听。
 - 阿里云 CDT 接口可能存在统计延迟，阈值不要贴着免费额度设置。
 - 建议阈值留足缓冲，例如 200GB 免费额度可先设为 180GB。

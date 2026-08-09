@@ -4,26 +4,30 @@ services:
     container_name: cdt-monitor
     restart: unless-stopped
     environment:
-      # Required. Prefer setting real values in .env instead of editing this file.
-      ALIYUN_ACCESS_KEY_ID: ${ALIYUN_ACCESS_KEY_ID}
-      ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET}
+      # 必填。真实值应写入 .env，不要直接修改本文件。
+      ALIYUN_ACCESS_KEY_ID: ${ALIYUN_ACCESS_KEY_ID:?ALIYUN_ACCESS_KEY_ID is required}
+      ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET:?ALIYUN_ACCESS_KEY_SECRET is required}
       ALIYUN_REGION_ID: ${ALIYUN_REGION_ID:-cn-hongkong}
-      ECS_INSTANCE_ID: ${ECS_INSTANCE_ID}
+      ECS_INSTANCE_ID: ${ECS_INSTANCE_ID:?ECS_INSTANCE_ID is required}
 
-      # Traffic threshold in GB. When current CDT traffic reaches this value,
-      # the guard stops the configured ECS instance.
+      # CDT 流量阈值，单位为 GB。当前流量达到该值后，守护进程会停止配置的 ECS 实例。
       CDT_TRAFFIC_THRESHOLD_GB: ${CDT_TRAFFIC_THRESHOLD_GB:-180}
 
-      # keep_running: start ECS when under threshold, stop ECS when over threshold.
-      # protect_only: only stop ECS when over threshold; never auto-start.
-      # dry_run: only log intended actions.
+      # keep_running：低于阈值时启动 ECS，达到阈值时停止 ECS。
+      # protect_only：只在达到阈值时停止 ECS，不自动启动。
+      # dry_run：只记录计划执行的动作，不实际启停 ECS。
       CDT_CONTROL_MODE: ${CDT_CONTROL_MODE:-keep_running}
 
-      # Check interval. Minimum accepted by the container is 10 seconds.
+      # 巡检间隔，单位为秒，最低为 10 秒。
       CDT_CHECK_INTERVAL_SECONDS: ${CDT_CHECK_INTERVAL_SECONDS:-60}
 
-      # StopCharging stops billing but may change non-EIP public IP after restart.
-      # Use KeepCharging only if you explicitly need to keep compute resources billed.
+      # StopCharging 会停止计算资源计费，但非 EIP 公网 IP 可能在重启后变化。
+      # 只有明确需要保留计算资源并继续计费时才使用 KeepCharging。
       ECS_STOPPED_MODE: ${ECS_STOPPED_MODE:-StopCharging}
       ECS_FORCE_STOP: ${ECS_FORCE_STOP:-false}
+      CDT_DRY_RUN: ${CDT_DRY_RUN:-false}
+      RUN_ONCE: ${RUN_ONCE:-false}
+
+      # 可选。所有巡检事件统一发送到这一个 Uptime Kuma Push 监控地址。
+      UPTIME_KUMA_PUSH_URL: ${UPTIME_KUMA_PUSH_URL:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}

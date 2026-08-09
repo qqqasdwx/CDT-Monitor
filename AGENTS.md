@@ -2,7 +2,9 @@
 
 ## Scope
 
-This repository maintains CDT Guard, a small Python daemon that checks Alibaba Cloud CDT traffic and controls configured ECS instances when the traffic threshold is crossed.
+This repository maintains CDT Guard, a small Python daemon that checks Alibaba Cloud CDT traffic and controls one configured ECS instance when the traffic threshold is crossed.
+
+The active product supports exactly one Alibaba Cloud account and one ECS instance per process. Do not add multi-account or multi-instance configuration.
 
 The active product lives on `master`. The retired Go + React console is preserved on `archive/fullstack-console` and must not be merged back into the active product unless explicitly requested.
 
@@ -15,7 +17,8 @@ Keep the active project focused on one operational loop:
 3. Query the configured ECS instance state.
 4. Decide whether an ECS start or stop action is required.
 5. Execute the action and write clear logs.
-6. Expose process health through the container healthcheck.
+6. Report the cycle result to one optional Uptime Kuma Push monitor.
+7. Expose successful cycle health through the container healthcheck.
 
 Current stack:
 
@@ -30,7 +33,7 @@ The following are non-goals unless a new requirement explicitly justifies them:
 - database persistence
 - account management
 - multi-cloud abstractions
-- notification frameworks
+- notification frameworks beyond the single Uptime Kuma Push integration
 - workflow engines
 - remote administration
 
@@ -39,6 +42,7 @@ The following are non-goals unless a new requirement explicitly justifies them:
 ```text
 .github/workflows/docker-image.yml  # Multi-architecture GHCR build
 scripts/cdt_guard.py                # Guard process and healthcheck
+tests/test_cdt_guard.py             # Unit tests with fake cloud and HTTP clients
 Dockerfile                          # Runtime image
 compose.yaml                        # Deployment example
 requirements.txt                    # Pinned Python dependencies
@@ -55,6 +59,7 @@ Do not create additional layers or directories unless they remove real complexit
 - Treat Alibaba Cloud responses as untrusted external input and validate fields before making resource decisions.
 - Never log or commit AccessKey secrets, tokens, `.env` files, or real instance credentials.
 - Keep start and stop actions idempotent by checking instance state first.
+- Send at most one Uptime Kuma Push per cycle and use only `UPTIME_KUMA_PUSH_URL`.
 - Let API and configuration failures surface in logs; do not fabricate successful checks or actions.
 - Tests and local development must not call real Alibaba Cloud APIs unless the task explicitly supplies dedicated test credentials.
 - Keep `ghcr.io/qqqasdwx/cdt-monitor:guard` compatible because it is the deployed rolling tag.
